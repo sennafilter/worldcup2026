@@ -659,7 +659,6 @@ main {
   border: 2px solid var(--border);
   overflow: hidden;
 }
-
 .map-header {
   padding: 16px 18px 12px;
   border-bottom: 2px solid var(--border);
@@ -667,29 +666,47 @@ main {
   font-size: 16px;
   font-weight: 700;
 }
-
-#leaflet-map { z-index: 0; }
-
-/* Override Leaflet popup to match app style */
-.wc-popup .leaflet-popup-content-wrapper {
-  background: var(--white, #FDFAF3);
-  border: 2px solid #D8CBAF;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(28,20,16,0.15);
-  padding: 10px 14px;
+.map-svg-wrap {
+  background: #d4eaf7;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
 }
-.wc-popup .leaflet-popup-tip {
-  background: var(--white, #FDFAF3);
+#map-svg {
+  width: 100%;
+  height: auto;
+  display: block;
 }
-.wc-popup .leaflet-popup-content { margin: 0; }
-
-.map-svg-container {
-  background: #dceef7;
-  padding: 4px;
+/* Country fills */
+.map-country-usa    { fill: #c8daa8; stroke: #8aaa60; stroke-width: 0.8; }
+.map-country-canada { fill: #b8d090; stroke: #7a9a50; stroke-width: 0.8; }
+.map-country-mexico { fill: #d0d8a0; stroke: #8aaa60; stroke-width: 0.8; }
+.map-lake           { fill: #a0c5e5; opacity: 0.85; }
+.map-country-label  { font-family: 'DM Sans', sans-serif; font-weight: 700; fill: #3a5520; opacity: 0.4; letter-spacing: 2px; pointer-events: none; }
+.map-ocean-label    { font-family: 'DM Sans', sans-serif; fill: #4a78a0; opacity: 0.6; font-style: italic; pointer-events: none; }
+/* Venue pins */
+.venue-pin-group { cursor: pointer; }
+.venue-pin-halo  { transition: r 0.2s, opacity 0.2s; }
+.venue-pin-group:hover .venue-pin-halo { r: 18; opacity: 0.5; }
+.venue-pin-dot   { transition: r 0.15s; }
+.venue-pin-group:hover .venue-pin-dot  { r: 11; }
+.venue-pin-label { font-family: 'DM Mono', monospace; font-weight: 500; fill: white; font-size: 9px; pointer-events: none; dominant-baseline: central; text-anchor: middle; }
+/* Tooltip */
+.map-tooltip {
+  position: absolute;
+  background: rgba(28,20,16,0.92);
+  color: #F5EDD9;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  display: none;
+  transition: opacity 0.1s;
 }
-
-#map-svg { width: 100%; height: auto; display: block; }
-
 .map-legend {
   padding: 12px 18px;
   display: flex;
@@ -697,7 +714,6 @@ main {
   flex-wrap: wrap;
   border-top: 1.5px solid var(--border);
 }
-
 .legend-item {
   display: flex;
   align-items: center;
@@ -706,19 +722,16 @@ main {
   color: var(--muted);
   font-weight: 500;
 }
-
 .legend-swatch {
   width: 10px; height: 10px;
   border-radius: 50%;
 }
-
 .venue-list {
   margin-top: 14px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-
 .venue-item {
   background: var(--white);
   border: 2px solid var(--border);
@@ -730,16 +743,9 @@ main {
 }
 .venue-item:hover { border-color: var(--ink); }
 .venue-item.active { border-color: var(--ink); background: var(--cream2); }
-
-.venue-item-name { font-weight: 700; color: var(--ink); margin-bottom: 2px; }
-.venue-item-city { color: var(--muted); font-size: 11px; }
-.venue-item-count {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  color: var(--blue);
-  margin-top: 4px;
-  font-weight: 500;
-}
+.venue-item-name  { font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.venue-item-city  { color: var(--muted); font-size: 11px; }
+.venue-item-count { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--blue); margin-top: 4px; font-weight: 500; }
 
 /* ── BRACKET VIEW ── */
 .bracket-scroll {
@@ -1275,10 +1281,10 @@ main {
         </svg>
         <div id="map-tooltip" style="position:absolute;display:none;background:rgba(28,20,16,0.92);color:#F5EDD9;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;pointer-events:none;z-index:10;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.3)"></div>
       </div>
-      <!-- Canvas map — rendered by renderMap() -->
-      <div id="canvas-map-wrap" style="position:relative;width:100%;background:#c8dff0;border-radius:0 0 0 0;overflow:hidden">
-        <canvas id="map-canvas" style="display:block;width:100%;cursor:crosshair"></canvas>
-        <div id="map-tooltip" style="position:absolute;display:none;background:rgba(28,20,16,0.92);color:#F5EDD9;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;pointer-events:none;z-index:10;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.3)"></div>
+      <!-- SVG map — built by renderMap() on first call -->
+      <div class="map-svg-wrap" id="map-svg-wrap" style="position:relative">
+        <svg id="map-svg" viewBox="0 0 700 460" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="map-tooltip" id="map-tooltip"></div>
       </div>
       <div class="map-legend">
         <div class="legend-item"><div class="legend-swatch" style="background:var(--blue)"></div>USA (11 venues)</div>
@@ -1884,133 +1890,131 @@ const LAND = {
   ]
 };
 
-let _mapHitZones = [];
-let _mapDrawn = false;
+// ─────────────────────────────────────────────
+// MAP  (SVG — built once, instant on re-open)
+// ─────────────────────────────────────────────
+let _mapBuilt = false;
+
+// Mercator → SVG coords  (viewBox 0 0 700 460)
+const _ML0=-145, _ML1=-60, _MLat0=55, _MLat1=13, _MW=700, _MH=460;
+function _mY(lat){ const r=Math.PI/180; return Math.log(Math.tan(Math.PI/4+lat*r/2)); }
+const _my0=_mY(_MLat0), _my1=_mY(_MLat1);
+function _ll(lat,lon){
+  const x=(lon-_ML0)/(_ML1-_ML0)*_MW;
+  const y=(_my0-_mY(lat))/(_my0-_my1)*_MH;
+  return [+x.toFixed(1),+y.toFixed(1)];
+}
+function _path(coords){ return coords.map((p,i)=>{ const [x,y]=_ll(p[0],p[1]); return (i?'L':'M')+x+' '+y; }).join(' ')+'Z'; }
+
+const _LAND = {
+  canada:[
+    [55,-140],[55,-60],[47,-60],[44,-66],[45,-71],[44,-76],[43,-79],[44,-83],
+    [46,-84],[47,-88],[47,-93],[50,-97],[50,-102],[50,-110],[49,-117],[49,-123],
+    [50,-128],[54,-130],[55,-133],[55,-140]
+  ],
+  usa:[
+    [49,-123],[49,-117],[49,-110],[49,-104],[49,-97],[48,-90],[47,-88],[44,-83],
+    [43,-79],[44,-76],[45,-71],[44,-66],[43,-70],[41,-70],[41,-74],[40,-74],
+    [39,-75],[38,-75],[37,-76],[35,-76],[34,-77],[32,-80],[30,-81],[25,-81],
+    [25,-80],[26,-80],[30,-85],[29,-89],[29,-94],[26,-97],[25,-98],[26,-103],
+    [32,-107],[32,-117],[33,-118],[34,-120],[38,-123],[46,-124],[48,-124],[49,-123]
+  ],
+  florida:[[25,-81],[24.5,-81],[24.5,-80.5],[25.5,-80],[25,-81]],
+  mexico:[
+    [32,-117],[29,-118],[27,-112],[23,-110],[22,-106],[21,-105],[20,-105],
+    [19,-104],[19,-103],[19,-99],[18,-95],[18,-92],[17,-91],[16,-90],[15,-92],
+    [16,-89],[18,-88],[21,-87],[21,-90],[22,-90],[25,-91],[26,-98],[26,-103],[32,-107],[32,-117]
+  ],
+  baja:[
+    [32,-117],[30,-116],[28,-115],[26,-112],[24,-110],[23,-110],[27,-112],[29,-118],[32,-117]
+  ]
+};
+
+const _LAKES = [
+  [45.5,-83.5,26,9],[44.2,-77,18,8],[45.8,-84.5,18,7],[47,-87,22,9],[44,-87,14,7]
+];
 
 function renderMap() {
-  const canvas = document.getElementById('map-canvas');
-  const tt = document.getElementById('map-tooltip');
-  // Skip full redraw on repeat tab switches — canvas persists in DOM
-  if (_mapDrawn) { return; }
-  _mapDrawn = true;
-  // Set canvas to fixed logical size — no DPR tricks, keep it simple
-  canvas.width  = MAP_W;
-  canvas.height = MAP_H;
-  canvas.style.width  = '100%';
-  canvas.style.height = 'auto';
+  const svg = document.getElementById('map-svg');
+  const tt  = document.getElementById('map-tooltip');
+  const wrap = document.getElementById('map-svg-wrap');
+  if (_mapBuilt) return;
+  _mapBuilt = true;
 
-  const ctx = canvas.getContext('2d');
-
-  // ── Ocean ──
-  ctx.fillStyle = '#c4ddf0';
-  ctx.fillRect(0, 0, MAP_W, MAP_H);
-
-  // ── Land polygons ──
-  function poly(coords, fill, strokeCol) {
-    ctx.beginPath();
-    coords.forEach(([lat,lon], i) => {
-      const [x,y] = llToCanvas(lat, lon);
-      i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-    });
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.strokeStyle = strokeCol;
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
+  const ns = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k,v));
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function txt(str, x, y, cls, parent) {
+    const t = document.createElementNS(ns, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('class', cls);
+    t.setAttribute('text-anchor','middle');
+    t.textContent = str;
+    if (parent) parent.appendChild(t);
+    return t;
   }
 
-  poly(LAND.canada,       '#b8d090', '#7a9a50');
-  poly(LAND.usa_mainland, '#c8daa8', '#7a9a50');
-  poly(LAND.florida,      '#c8daa8', '#7a9a50');
-  poly(LAND.mexico,       '#d0d8a0', '#7a9a50');
-  poly(LAND.baja,         '#d0d8a0', '#7a9a50');
+  // Ocean bg
+  el('rect', {width:700, height:460, fill:'#d4eaf7'}, svg);
 
-  // ── Great Lakes ──
-  [[45.5,-83.5,26,9],[44.2,-77,18,8],[45.8,-84.5,18,7],[47,-87,22,9],[44,-87,14,7]]
-  .forEach(([lat,lon,rx,ry]) => {
-    const [cx,cy] = llToCanvas(lat,lon);
-    ctx.beginPath();
-    ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
-    ctx.fillStyle='#a0c5e5';
-    ctx.globalAlpha=0.8; ctx.fill(); ctx.globalAlpha=1;
+  // Land
+  el('path', {d:_path(_LAND.canada), class:'map-country-canada'}, svg);
+  el('path', {d:_path(_LAND.usa),    class:'map-country-usa'}, svg);
+  el('path', {d:_path(_LAND.florida),class:'map-country-usa'}, svg);
+  el('path', {d:_path(_LAND.mexico), class:'map-country-mexico'}, svg);
+  el('path', {d:_path(_LAND.baja),   class:'map-country-mexico'}, svg);
+
+  // Great Lakes
+  _LAKES.forEach(([lat,lon,rx,ry]) => {
+    const [cx,cy] = _ll(lat,lon);
+    el('ellipse',{cx,cy,rx,ry,class:'map-lake'},svg);
   });
 
-  // ── Labels ──
-  ctx.textAlign='center';
-  const label = (text, lat, lon, size, bold, alpha) => {
-    const [x,y] = llToCanvas(lat,lon);
-    ctx.globalAlpha = alpha;
-    ctx.font = `${bold?'bold ':''} ${size}px sans-serif`;
-    ctx.fillStyle = '#3a5520';
-    ctx.fillText(text, x, y);
-    ctx.globalAlpha = 1;
-  };
-  label('UNITED STATES', 40, -100, 13, true, 0.4);
-  label('CANADA',         56,  -96, 11, true, 0.35);
-  label('MEXICO',         22, -102, 10, true, 0.35);
+  // Country labels
+  const [ulx,uly]=_ll(40,-100); txt('UNITED STATES',ulx,uly,'map-country-label',svg).style.fontSize='13px';
+  const [clx,cly]=_ll(56,-96);  txt('CANADA',clx,cly,'map-country-label',svg).style.fontSize='11px';
+  const [mlx,mly]=_ll(22,-102); txt('MEXICO',mlx,mly,'map-country-label',svg).style.fontSize='10px';
 
-  ctx.font='italic 9px sans-serif';
-  ctx.fillStyle='#4a78a0'; ctx.globalAlpha=0.6;
-  let [x,y]=llToCanvas(37,-132); ctx.fillText('Pacific Ocean',x,y);
-  [x,y]=llToCanvas(35,-62);      ctx.fillText('Atlantic',x,y);
-  [x,y]=llToCanvas(23,-91);      ctx.fillText('Gulf of Mexico',x,y);
-  ctx.globalAlpha=1;
+  // Ocean labels
+  const [px,py]=_ll(37,-132); txt('Pacific Ocean',px,py,'map-ocean-label',svg).style.fontSize='9px';
+  const [ax,ay]=_ll(35,-62);  txt('Atlantic',ax,ay,'map-ocean-label',svg).style.fontSize='9px';
+  const [gx,gy]=_ll(23,-91);  txt('Gulf of Mexico',gx,gy,'map-ocean-label',svg).style.fontSize='8px';
 
-  // ── Venue pins ──
-  _mapHitZones = [];
+  // Venue pins
   VENUES.forEach(v => {
-    const mc = MATCHES.filter(m => m.ground.toLowerCase().includes(
-      v.name.toLowerCase().split('/')[0].toLowerCase()
-    )).length;
-    const [px,py] = llToCanvas(v.lat, v.lon);
-    const col = v.country==='Canada' ? '#D4341A' : v.country==='Mexico' ? '#E8A020' : '#1B4F8A';
+    const mc = MATCHES.filter(m => m.ground.toLowerCase().includes(v.name.toLowerCase().split('/')[0].toLowerCase())).length;
+    const [px,py] = _ll(v.lat, v.lon);
+    const col = v.country==='Canada'?'#D4341A': v.country==='Mexico'?'#E8A020':'#1B4F8A';
 
-    // halo
-    ctx.beginPath(); ctx.arc(px,py,15,0,Math.PI*2);
-    ctx.fillStyle=col+'30'; ctx.fill();
-    // dot
-    ctx.beginPath(); ctx.arc(px,py,9,0,Math.PI*2);
-    ctx.fillStyle=col; ctx.fill();
-    ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke();
-    // number
-    ctx.fillStyle='white';
-    ctx.font='bold 9px monospace';
-    ctx.textAlign='center';
-    ctx.fillText(String(mc), px, py+3);
+    const g = el('g', {class:'venue-pin-group', 'data-venue':v.name}, svg);
+    el('circle',{cx:px,cy:py,r:14,fill:col,opacity:'0.2',class:'venue-pin-halo'},g);
+    el('circle',{cx:px,cy:py,r:9, fill:col,stroke:'white','stroke-width':'2',class:'venue-pin-dot'},g);
+    el('text',  {x:px,y:py,class:'venue-pin-label'},g).textContent = mc;
 
-    _mapHitZones.push({px,py,r:12,v,mc,col});
+    // Tooltip
+    g.addEventListener('mouseenter', e => {
+      const rect = wrap.getBoundingClientRect();
+      const svgRect = svg.getBoundingClientRect();
+      const scaleX = svgRect.width / 700;
+      const scaleY = svgRect.height / 460;
+      const tx = px * scaleX + 14;
+      const ty = py * scaleY - 50;
+      tt.innerHTML = `<span style="font-size:14px">${v.flag}</span> <strong>${v.name}</strong><br><small style="opacity:.7">${v.city} · ${mc} match${mc!==1?'es':''}</small>`;
+      tt.style.display = 'block';
+      tt.style.left = tx + 'px';
+      tt.style.top  = ty + 'px';
+    });
+    g.addEventListener('mouseleave', () => { tt.style.display = 'none'; });
+    g.addEventListener('click', () => selectVenue(v.name));
   });
 
-  // ── Interaction ──
-  canvas.onmousemove = e => {
-    const r = canvas.getBoundingClientRect();
-    const mx = (e.clientX-r.left)/r.width*MAP_W;
-    const my = (e.clientY-r.top)/r.height*MAP_H;
-    const hit = _mapHitZones.find(z=>Math.hypot(mx-z.px,my-z.py)<z.r+5);
-    if(hit){
-      canvas.style.cursor='pointer';
-      tt.innerHTML=`<span style="font-size:14px">${hit.v.flag}</span> <strong>${hit.v.name}</strong><br><small style="opacity:.7">${hit.v.city} · ${hit.mc} match${hit.mc!==1?'es':''}</small>`;
-      tt.style.display='block';
-      tt.style.left=(e.clientX-r.left+12)+'px';
-      tt.style.top=(e.clientY-r.top-50)+'px';
-    } else {
-      canvas.style.cursor='default';
-      tt.style.display='none';
-    }
-  };
-  canvas.onmouseleave=()=>{ tt.style.display='none'; };
-  canvas.onclick=e=>{
-    const r=canvas.getBoundingClientRect();
-    const mx=(e.clientX-r.left)/r.width*MAP_W;
-    const my=(e.clientY-r.top)/r.height*MAP_H;
-    const hit=_mapHitZones.find(z=>Math.hypot(mx-z.px,my-z.py)<z.r+5);
-    if(hit) selectVenue(hit.v.name);
-  };
-
-  // ── Venue card list ──
-  document.getElementById('venue-list').innerHTML = VENUES.map(v=>{
-    const mc=MATCHES.filter(m=>m.ground.toLowerCase().includes(v.name.toLowerCase().split('/')[0].toLowerCase())).length;
+  // Venue card list
+  document.getElementById('venue-list').innerHTML = VENUES.map(v => {
+    const mc = MATCHES.filter(m => m.ground.toLowerCase().includes(v.name.toLowerCase().split('/')[0].toLowerCase())).length;
     return `<div class="venue-item" onclick="selectVenue('${v.name}')">
       <div class="venue-item-name">${v.flag} ${v.name}</div>
       <div class="venue-item-city">${v.city}</div>
@@ -2020,15 +2024,20 @@ function renderMap() {
 }
 
 function selectVenue(name) {
-  document.querySelectorAll('.venue-item').forEach((el,i)=>{
-    el.classList.toggle('active', VENUES[i]?.name===name);
+  document.querySelectorAll('.venue-item').forEach(el => {
+    el.classList.toggle('active', el.querySelector('.venue-item-name')?.textContent.includes(name));
   });
-  const ms = MATCHES.filter(m=>m.ground.toLowerCase().includes(name.toLowerCase().split('/')[0].toLowerCase()));
+  // Highlight pin
+  document.querySelectorAll('.venue-pin-group').forEach(g => {
+    const active = g.dataset.venue === name;
+    g.querySelector('.venue-pin-dot').setAttribute('r', active ? 12 : 9);
+  });
+  const ms = MATCHES.filter(m => m.ground.toLowerCase().includes(name.toLowerCase().split('/')[0].toLowerCase()));
   const vm = document.getElementById('venue-match-list');
-  if(!ms.length){vm.innerHTML='';return;}
-  const v = VENUES.find(v=>v.name===name);
-  vm.innerHTML=`<div class="match-list-header"><div class="match-list-title">${v?.flag||''} ${name}</div><div class="match-list-sub">${ms.length} matches</div></div>`;
-  ms.forEach(m=>{ vm.innerHTML+=matchRowHTML(m); });
+  if (!ms.length) { vm.innerHTML = ''; return; }
+  const v = VENUES.find(v => v.name === name);
+  vm.innerHTML = `<div class="match-list-header"><div class="match-list-title">${v?.flag||''} ${name}</div><div class="match-list-sub">${ms.length} matches</div></div>`;
+  ms.forEach(m => { vm.innerHTML += matchRowHTML(m); });
 }
 
 // ─────────────────────────────────────────────
