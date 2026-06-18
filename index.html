@@ -1913,7 +1913,6 @@ function renderMap() {
   const tt   = document.getElementById('map-tooltip');
   const svg  = document.getElementById('map-svg');
 
-  // Load D3 + TopoJSON from CDN, then draw
   function loadScript(src) {
     return new Promise(res => {
       const s = document.createElement('script');
@@ -1924,146 +1923,168 @@ function renderMap() {
   Promise.all([
     loadScript('https://cdn.jsdelivr.net/npm/d3-geo@3/dist/d3-geo.min.js'),
     loadScript('https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js')
-  ]).then(() => fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'))
-    .then(r => r.json())
-    .then(world => {
-      const W = 700, H = 460;
-      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  ])
+  .then(() => fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'))
+  .then(r => r.json())
+  .then(world => {
+    const W = 900, H = 560;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
 
-      const projection = d3.geoAlbersUsa()
-        .scale(900)
-        .translate([W * 0.48, H * 0.52]);
+    const proj = d3.geoConicEqualArea()
+      .parallels([25, 60])
+      .rotate([97, 0])
+      .center([0, 45])
+      .scale(750)
+      .translate([W / 2, H / 2]);
 
-      // Extend to cover Canada/Mexico with a custom conic
-      const proj = d3.geoConicEqualArea()
-        .parallels([20, 55])
-        .rotate([100, 0])
-        .center([0, 38])
-        .scale(630)
-        .translate([W / 2, H / 2]);
+    const path = d3.geoPath().projection(proj);
+    const ns = 'http://www.w3.org/2000/svg';
 
-      const path = d3.geoPath().projection(proj);
-      const ns = 'http://www.w3.org/2000/svg';
+    const bg = document.createElementNS(ns, 'rect');
+    bg.setAttribute('width', W); bg.setAttribute('height', H);
+    bg.setAttribute('fill', '#b8d4e8');
+    svg.appendChild(bg);
 
-      // Ocean background
-      const bg = document.createElementNS(ns, 'rect');
-      bg.setAttribute('width', W); bg.setAttribute('height', H);
-      bg.setAttribute('fill', '#cce5f0');
-      svg.appendChild(bg);
+    const countries = topojson.feature(world, world.objects.countries);
+    const hostIds = {
+      '840': { fill: '#e8efe0', stroke: '#7a9a55' },
+      '124': { fill: '#ddebd0', stroke: '#6a8a45' },
+      '484': { fill: '#e4ead8', stroke: '#8a9a55' }
+    };
 
-      // Country IDs in world-atlas: USA=840, Canada=124, Mexico=484
-      const countries = topojson.feature(world, world.objects.countries);
-      const idColors = { '840': '#c8dba8', '124': '#b8d090', '484': '#d4d8a0' };
-      const idStrokes = { '840': '#8aaa60', '124': '#7a9a50', '484': '#9aaa60' };
-
-      countries.features.forEach(f => {
-        const id = f.id + '';
-        if (!idColors[id]) return;
-        const el = document.createElementNS(ns, 'path');
-        el.setAttribute('d', path(f));
-        el.setAttribute('fill', idColors[id]);
-        el.setAttribute('stroke', idStrokes[id]);
-        el.setAttribute('stroke-width', '0.8');
-        svg.appendChild(el);
-      });
-
-      // Ocean labels
-      function addLabel(text, lat, lon, size, color) {
-        const coords = proj([lon, lat]);
-        if (!coords) return;
-        const t = document.createElementNS(ns, 'text');
-        t.setAttribute('x', coords[0]); t.setAttribute('y', coords[1]);
-        t.setAttribute('text-anchor', 'middle');
-        t.setAttribute('fill', color || '#4a78a0');
-        t.setAttribute('font-size', size || '9');
-        t.setAttribute('font-style', 'italic');
-        t.setAttribute('font-family', "'DM Sans', sans-serif");
-        t.setAttribute('pointer-events', 'none');
-        t.setAttribute('opacity', '0.7');
-        t.textContent = text;
-        svg.appendChild(t);
-      }
-      addLabel('Pacific Ocean', 38, -135, 10);
-      addLabel('Atlantic', 38, -60, 9);
-      addLabel('Gulf of Mexico', 24, -90, 8);
-      addLabel('UNITED STATES', 38, -96, 13, '#3a5520');
-      addLabel('CANADA', 57, -96, 11, '#3a5520');
-      addLabel('MEXICO', 24, -102, 10, '#3a5520');
-
-      // Venue pins
-      VENUES.forEach(v => {
-        const mc = MATCHES.filter(m => m.ground.toLowerCase().includes(v.name.toLowerCase().split('/')[0].toLowerCase())).length;
-        const coords = proj([v.lon, v.lat]);
-        if (!coords) return;
-        const [px, py] = coords;
-        const col = v.country === 'Canada' ? '#D4341A' : v.country === 'Mexico' ? '#E8A020' : '#1B4F8A';
-
-        const g = document.createElementNS(ns, 'g');
-        g.setAttribute('class', 'venue-pin-group');
-        g.dataset.venue = v.name;
-
-        const halo = document.createElementNS(ns, 'circle');
-        halo.setAttribute('cx', px); halo.setAttribute('cy', py);
-        halo.setAttribute('r', 14); halo.setAttribute('fill', col);
-        halo.setAttribute('opacity', '0.2');
-        halo.setAttribute('class', 'venue-pin-halo');
-        g.appendChild(halo);
-
-        const dot = document.createElementNS(ns, 'circle');
-        dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-        dot.setAttribute('r', 9); dot.setAttribute('fill', col);
-        dot.setAttribute('stroke', 'white'); dot.setAttribute('stroke-width', '2');
-        dot.setAttribute('class', 'venue-pin-dot');
-        g.appendChild(dot);
-
-        const lbl = document.createElementNS(ns, 'text');
-        lbl.setAttribute('x', px); lbl.setAttribute('y', py);
-        lbl.setAttribute('class', 'venue-pin-label');
-        lbl.textContent = mc;
-        g.appendChild(lbl);
-
-        g.addEventListener('mouseenter', () => {
-          const svgRect = svg.getBoundingClientRect();
-          const scaleX = svgRect.width / W;
-          const scaleY = svgRect.height / H;
-          tt.innerHTML = v.flag + ' <strong>' + v.name + '</strong><br><small style="opacity:.7">' + v.city + ' · ' + mc + ' match' + (mc !== 1 ? 'es' : '') + '</small>';
-          tt.style.display = 'block';
-          tt.style.left = (px * scaleX + 14) + 'px';
-          tt.style.top  = (py * scaleY - 50) + 'px';
-        });
-        g.addEventListener('mouseleave', () => { tt.style.display = 'none'; });
-        g.addEventListener('click', () => selectVenue(v.name));
-        svg.appendChild(g);
-      });
-
-      // Venue list
-      document.getElementById('venue-list').innerHTML = VENUES.map(v => {
-        const mc = MATCHES.filter(m => m.ground.toLowerCase().includes(v.name.toLowerCase().split('/')[0].toLowerCase())).length;
-        return '<div class="venue-item" onclick="selectVenue('' + v.name.replace(/'/g, "\'") + '')">' +
-          '<div class="venue-item-name">' + v.flag + ' ' + v.name + '</div>' +
-          '<div class="venue-item-city">' + v.city + '</div>' +
-          '<div class="venue-item-count">' + mc + ' matches</div></div>';
-      }).join('');
+    countries.features.forEach(f => {
+      if (hostIds[String(f.id)]) return;
+      const d = path(f); if (!d) return;
+      const el = document.createElementNS(ns, 'path');
+      el.setAttribute('d', d);
+      el.setAttribute('fill', '#d2d8c8');
+      el.setAttribute('stroke', '#b8c0aa');
+      el.setAttribute('stroke-width', '0.4');
+      svg.appendChild(el);
     });
-}
 
-function selectVenue(name) {
-  document.querySelectorAll('.venue-item').forEach(el => {
-    el.classList.toggle('active', el.querySelector('.venue-item-name')?.textContent.includes(name));
-  });
-  document.querySelectorAll('.venue-pin-group').forEach(g => {
-    const active = g.dataset.venue === name;
-    const dot = g.querySelector('.venue-pin-dot');
-    if (dot) dot.setAttribute('r', active ? 12 : 9);
-  });
-  const ms = MATCHES.filter(m => m.ground.toLowerCase().includes(name.toLowerCase().split('/')[0].toLowerCase()));
-  const vm = document.getElementById('venue-match-list');
-  if (!ms.length) { vm.innerHTML = ''; return; }
-  const v = VENUES.find(v => v.name === name);
-  vm.innerHTML = '<div class="match-list-header"><div class="match-list-title">' + (v?.flag || '') + ' ' + name + '</div><div class="match-list-sub">' + ms.length + ' matches</div></div>';
-  ms.forEach(m => { vm.innerHTML += matchRowHTML(m); });
-}
+    countries.features.forEach(f => {
+      const style = hostIds[String(f.id)]; if (!style) return;
+      const d = path(f); if (!d) return;
+      const el = document.createElementNS(ns, 'path');
+      el.setAttribute('d', d);
+      el.setAttribute('fill', style.fill);
+      el.setAttribute('stroke', style.stroke);
+      el.setAttribute('stroke-width', '1.2');
+      el.setAttribute('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))');
+      svg.appendChild(el);
+    });
 
+    function addLabel(text, lat, lon, size, color, bold) {
+      const coords = proj([lon, lat]); if (!coords) return;
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', coords[0]); t.setAttribute('y', coords[1]);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('fill', color || '#4a6830');
+      t.setAttribute('font-size', size || '11');
+      t.setAttribute('font-weight', bold ? '700' : '400');
+      t.setAttribute('font-family', "'DM Sans', sans-serif");
+      t.setAttribute('letter-spacing', bold ? '1.5' : '0.5');
+      t.setAttribute('pointer-events', 'none');
+      t.setAttribute('opacity', '0.85');
+      t.textContent = text;
+      svg.appendChild(t);
+    }
+    addLabel('CANADA', 56, -96, 13, '#3a5520', true);
+    addLabel('UNITED STATES', 39, -98, 14, '#2a4510', true);
+    addLabel('MEXICO', 23, -102, 11, '#3a5520', true);
+
+    function addOceanLabel(text, lat, lon, size) {
+      const coords = proj([lon, lat]); if (!coords) return;
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', coords[0]); t.setAttribute('y', coords[1]);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('fill', '#3a6080');
+      t.setAttribute('font-size', size || '9');
+      t.setAttribute('font-style', 'italic');
+      t.setAttribute('font-family', "'DM Sans', sans-serif");
+      t.setAttribute('pointer-events', 'none');
+      t.setAttribute('opacity', '0.65');
+      t.textContent = text;
+      svg.appendChild(t);
+    }
+    addOceanLabel('Pacific Ocean', 40, -143, 11);
+    addOceanLabel('Atlantic', 40, -59, 10);
+    addOceanLabel('Gulf of Mexico', 24, -91, 9);
+    addOceanLabel('Hudson Bay', 60, -86, 9);
+
+    VENUES.forEach(v => {
+      const mc = MATCHES.filter(m =>
+        m.ground && m.ground.toLowerCase().includes(v.name.toLowerCase().split('/')[0].toLowerCase())
+      ).length;
+      const coords = proj([v.lon, v.lat]); if (!coords) return;
+      const [px, py] = coords;
+
+      const col = v.country === 'Canada' ? '#c0392b' : v.country === 'Mexico' ? '#d4820a' : '#1a3f7a';
+      const colLight = v.country === 'Canada' ? '#e85c50' : v.country === 'Mexico' ? '#f0a030' : '#2d6cb8';
+
+      const g = document.createElementNS(ns, 'g');
+      g.setAttribute('class', 'venue-pin-group');
+      g.style.cursor = 'pointer';
+
+      const ring = document.createElementNS(ns, 'circle');
+      ring.setAttribute('cx', px); ring.setAttribute('cy', py);
+      ring.setAttribute('r', '13'); ring.setAttribute('fill', colLight); ring.setAttribute('opacity', '0.2');
+      g.appendChild(ring);
+
+      const dot = document.createElementNS(ns, 'circle');
+      dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+      dot.setAttribute('r', '10'); dot.setAttribute('fill', col);
+      dot.setAttribute('stroke', 'white'); dot.setAttribute('stroke-width', '2');
+      dot.setAttribute('filter', 'drop-shadow(0 1px 3px rgba(0,0,0,0.35))');
+      g.appendChild(dot);
+
+      const lbl = document.createElementNS(ns, 'text');
+      lbl.setAttribute('x', px); lbl.setAttribute('y', py + 4);
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.setAttribute('fill', 'white'); lbl.setAttribute('font-size', '9');
+      lbl.setAttribute('font-weight', '700');
+      lbl.setAttribute('font-family', "'DM Mono', monospace");
+      lbl.setAttribute('pointer-events', 'none');
+      lbl.textContent = mc;
+      g.appendChild(lbl);
+
+      g.addEventListener('mouseenter', () => {
+        const svgRect = svg.getBoundingClientRect();
+        const scaleX = svgRect.width / W, scaleY = svgRect.height / H;
+        tt.innerHTML = v.flag + ' <strong>' + v.name + '</strong><br><small style="opacity:.75">' + v.city + ' · ' + mc + ' match' + (mc !== 1 ? 'es' : '') + '</small>';
+        tt.style.display = 'block';
+        tt.style.left = (px * scaleX + 14) + 'px';
+        tt.style.top  = (py * scaleY - 44) + 'px';
+        dot.setAttribute('r', '12'); dot.setAttribute('stroke-width', '3');
+      });
+      g.addEventListener('mouseleave', () => {
+        tt.style.display = 'none';
+        dot.setAttribute('r', '10'); dot.setAttribute('stroke-width', '2');
+      });
+      g.addEventListener('click', () => selectVenue(v.name));
+      svg.appendChild(g);
+    });
+
+    const listEl = document.getElementById('venue-list');
+    if (listEl) {
+      listEl.innerHTML = VENUES.map(v => {
+        const mc = MATCHES.filter(m =>
+          m.ground && m.ground.toLowerCase().includes(v.name.toLowerCase().split('/')[0].toLowerCase())
+        ).length;
+        return '<div class="venue-card" id="vc-' + v.name.replace(/[^a-z0-9]/gi,'_') + '" onclick="selectVenue(\'' + v.name + '\')">' +
+          '<div class="vc-flag">' + v.flag + '</div>' +
+          '<div class="vc-body"><div class="vc-name">' + v.name + '</div>' +
+          '<div class="vc-city">' + v.city + '</div></div>' +
+          '<div class="vc-count">' + mc + '</div></div>';
+      }).join('');
+    }
+  })
+  .catch(err => {
+    console.error('Map load failed:', err);
+    if (wrap) wrap.innerHTML = '<p style="padding:20px;color:#888">Map unavailable</p>';
+  });
+}
 // ─────────────────────────────────────────────
 // BRACKET
 // ─────────────────────────────────────────────
