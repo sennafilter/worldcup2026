@@ -2227,9 +2227,10 @@ setInterval(() => {
   if (av === 'view-calendar') renderCalendar();
   if (av === 'view-bracket')  renderBracket();
   if (av === 'view-groups')   renderGroups();
-  await fetchESPNScores();
-  const av2 = document.querySelector('.view-section[style*="block"], .view-section:not([style*="none"])')?.id;
-  if (av2 === 'view-games') renderGames();
+  fetchESPNScores().then(() => {
+    const av2 = document.querySelector('.view-section[style*="block"], .view-section:not([style*="none"])')?.id;
+    if (av2 === 'view-games') renderGames();
+  });
 }, 30000);
 // v2
 </script>
