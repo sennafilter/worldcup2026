@@ -1781,6 +1781,13 @@ function renderMatchList(container, matches, highlight) {
   target.innerHTML = html;
 }
 
+function scoreHTML(m, past) {
+  const sc = getMatchScore(m);
+  if (sc && sc.state === 'in')   return '<div class="mrt-vs live-score">' + sc.s1 + '–' + sc.s2 + '</div><div class="mrt-clock">' + sc.clock + '</div>';
+  if (sc && sc.state === 'post') return '<div class="mrt-vs">FT</div><div class="mrt-score-ft">' + sc.s1 + '–' + sc.s2 + '</div>';
+  return '<div class="mrt-vs">' + (past ? 'FT' : 'vs') + '</div>';
+}
+
 function matchRowHTML(m, highlight) {
   const live = isLive(m.date,m.time);
   const past = isPast(m.date,m.time);
@@ -1808,14 +1815,7 @@ function matchRowHTML(m, highlight) {
         ${isFav1?`<div class="fav-tag">favored</div>`:''}
       </div>
       <div class="mrt-center">
-      ` +
-      (() => {
-        const sc = getMatchScore(m);
-        if (sc && sc.state === 'in')   return \`<div class="mrt-vs live-score">\${sc.s1}–\${sc.s2}</div><div class="mrt-clock">\${sc.clock}</div>\`;
-        if (sc && sc.state === 'post') return \`<div class="mrt-vs">FT</div><div class="mrt-score-ft">\${sc.s1}–\${sc.s2}</div>\`;
-        return \`<div class="mrt-vs">\${past?'FT':'vs'}</div>\`;
-      })()
-      + `>
+      ${scoreHTML(m, past)}`>
         <div class="mrt-date">${m.date.slice(5).replace('-','/')}</div>
       </div>
       <div class="mrt-team" style="opacity:${h1?0.6:1}">
