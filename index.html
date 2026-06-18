@@ -1792,7 +1792,7 @@ function _normName(n) {
   return (n||'').toLowerCase()
     .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ä/g,'a').replace(/é/g,'e').replace(/è/g,'e')
     .replace(/ñ/g,'n').replace(/ß/g,'ss').replace(/[-']/g,' ')
-    .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+    .replace(/ and /g,' ').replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
 }
 
 function _ingestEvents(events, newScores, newAbbrev, newByName) {
