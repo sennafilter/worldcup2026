@@ -1877,7 +1877,7 @@ function getMatchScore(m) {
   } catch(e) { return null; }
 }
 
-fetchESPNScores();
+fetchESPNScores().then(() => { if (document.getElementById('view-games')?.style.display !== 'none') renderGames(); });
 function scoreHTML(m, past) {
   const sc = getMatchScore(m);
   if (sc && sc.state === 'in')   return '<div class="mrt-vs live-score">' + sc.s1 + '–' + sc.s2 + '</div><div class="mrt-clock">' + sc.clock + '</div>';
@@ -2227,7 +2227,9 @@ setInterval(() => {
   if (av === 'view-calendar') renderCalendar();
   if (av === 'view-bracket')  renderBracket();
   if (av === 'view-groups')   renderGroups();
-  fetchESPNScores();
+  await fetchESPNScores();
+  const av2 = document.querySelector('.view-section[style*="block"], .view-section:not([style*="none"])')?.id;
+  if (av2 === 'view-games') renderGames();
 }, 30000);
 // v2
 </script>
