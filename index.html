@@ -1885,11 +1885,14 @@ const LAND = {
 };
 
 let _mapHitZones = [];
+let _mapDrawn = false;
 
 function renderMap() {
   const canvas = document.getElementById('map-canvas');
-  const tt     = document.getElementById('map-tooltip');
-
+  const tt = document.getElementById('map-tooltip');
+  // Skip full redraw on repeat tab switches — canvas persists in DOM
+  if (_mapDrawn) { return; }
+  _mapDrawn = true;
   // Set canvas to fixed logical size — no DPR tricks, keep it simple
   canvas.width  = MAP_W;
   canvas.height = MAP_H;
@@ -2117,12 +2120,14 @@ buildTodayChip();
 renderGames();
 renderCountryPills();
 
-// Live refresh every 60s
-setInterval(()=>{
+// Live refresh every 30s — keeps live dots and past states current
+setInterval(() => {
   const av = document.querySelector('.view.active')?.id;
-  if(av === 'view-games') renderGames();
-  if(av === 'view-calendar') renderCalendar();
-}, 60000);
+  if (av === 'view-games')    renderGames();
+  if (av === 'view-calendar') renderCalendar();
+  if (av === 'view-bracket')  renderBracket();
+  if (av === 'view-groups')   renderGroups();
+}, 30000);
 </script>
 </body>
 </html>
