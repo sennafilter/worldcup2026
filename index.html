@@ -1914,16 +1914,19 @@ function renderMap() {
   const svg  = document.getElementById('map-svg');
 
   function loadScript(src) {
-    return new Promise(res => {
+    return new Promise((res, rej) => {
       const s = document.createElement('script');
-      s.src = src; s.onload = res; document.head.appendChild(s);
+      s.src = src;
+      s.onload = res;
+      s.onerror = rej;
+      document.head.appendChild(s);
     });
   }
 
-  Promise.all([
-    loadScript('https://cdn.jsdelivr.net/npm/d3-geo@3/dist/d3-geo.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js')
-  ])
+  // Load d3-array first (d3-geo depends on it), then d3-geo, then topojson
+  loadScript('https://cdn.jsdelivr.net/npm/d3-array@3/dist/d3-array.min.js')
+  .then(() => loadScript('https://cdn.jsdelivr.net/npm/d3-geo@3/dist/d3-geo.min.js'))
+  .then(() => loadScript('https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js'))
   .then(() => fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'))
   .then(r => r.json())
   .then(world => {
@@ -1971,7 +1974,6 @@ function renderMap() {
       el.setAttribute('fill', style.fill);
       el.setAttribute('stroke', style.stroke);
       el.setAttribute('stroke-width', '1.2');
-      el.setAttribute('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))');
       svg.appendChild(el);
     });
 
@@ -2036,7 +2038,6 @@ function renderMap() {
       dot.setAttribute('cx', px); dot.setAttribute('cy', py);
       dot.setAttribute('r', '10'); dot.setAttribute('fill', col);
       dot.setAttribute('stroke', 'white'); dot.setAttribute('stroke-width', '2');
-      dot.setAttribute('filter', 'drop-shadow(0 1px 3px rgba(0,0,0,0.35))');
       g.appendChild(dot);
 
       const lbl = document.createElementNS(ns, 'text');
@@ -2082,7 +2083,8 @@ function renderMap() {
   })
   .catch(err => {
     console.error('Map load failed:', err);
-    if (wrap) wrap.innerHTML = '<p style="padding:20px;color:#888">Map unavailable</p>';
+    if (svg) svg.innerHTML = '';
+    if (wrap) wrap.querySelector('.map-svg-container') && (wrap.querySelector('.map-svg-container').innerHTML = '<p style="padding:20px;color:#888">Map unavailable</p>');
   });
 }
 // ─────────────────────────────────────────────
