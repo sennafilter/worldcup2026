@@ -1792,7 +1792,8 @@ function _normName(n) {
   return (n||'').toLowerCase()
     .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ä/g,'a').replace(/é/g,'e').replace(/è/g,'e')
     .replace(/ñ/g,'n').replace(/ß/g,'ss').replace(/[-']/g,' ')
-    .replace(/ and /g,' ').replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+    .replace(/ and /g,' ').replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim()
+    .replace(/^dr /,'').replace(/ dr$/,'');
 }
 
 function _ingestEvents(events, newScores, newAbbrev, newByName) {
@@ -1853,8 +1854,14 @@ function getMatchScore(m) {
   try {
     const n1 = _normName(typeof teamName === 'function' ? teamName(m.team1) : m.team1);
     const n2 = _normName(typeof teamName === 'function' ? teamName(m.team2) : m.team2);
-    const byName = (window._scoresByName||{})[n1+'__'+n2] || (window._scoresByName||{})[n2+'__'+n1];
+    const sn = window._scoresByName || {};
+    // Try direct name match
+    const byName = sn[n1+'__'+n2] || sn[n2+'__'+n1];
     if (byName) return byName;
+    // Try word-reordered variants (e.g. "dr congo" <-> "congo dr")
+    const flip = s => s.split(' ').reverse().join(' ');
+    const byFlip = sn[flip(n1)+'__'+n2] || sn[n1+'__'+flip(n2)] || sn[flip(n1)+'__'+flip(n2)] || sn[n2+'__'+flip(n1)] || sn[flip(n2)+'__'+n1];
+    if (byFlip) return byFlip;
     const a1 = _espnAbbrevMap[n1] || _espnAbbrevMap[_normName(m.team1)];
     const a2 = _espnAbbrevMap[n2] || _espnAbbrevMap[_normName(m.team2)];
     if (!a1 || !a2) return null;
