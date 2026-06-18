@@ -1781,6 +1781,60 @@ function renderMatchList(container, matches, highlight) {
   target.innerHTML = html;
 }
 
+// ─────────────────────────────────────────────
+// LIVE SCORES  (ESPN public API — no key needed)
+// ─────────────────────────────────────────────
+window._scores = {};
+let _espnAbbrevMap = {};
+
+function _normName(n) {
+  return (n||'').toLowerCase()
+    .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ä/g,'a').replace(/é/g,'e').replace(/è/g,'e')
+    .replace(/[^a-z0-9 ]/g,'').trim();
+}
+
+async function fetchESPNScores() {
+  try {
+    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard', {cache:'no-store'});
+    const data = await res.json();
+    const newScores = {};
+    _espnAbbrevMap = {};
+    (data.events||[]).forEach(ev => {
+      const comp = ev.competitions[0];
+      const t = comp.competitors;
+      if (!t || t.length < 2) return;
+      const home = t.find(x => x.homeAway === 'home') || t[0];
+      const away = t.find(x => x.homeAway === 'away') || t[1];
+      const ha = home.team.abbreviation;
+      const aa = away.team.abbreviation;
+      _espnAbbrevMap[_normName(home.team.displayName)] = ha;
+      _espnAbbrevMap[_normName(home.team.shortDisplayName)] = ha;
+      _espnAbbrevMap[_normName(away.team.displayName)] = aa;
+      _espnAbbrevMap[_normName(away.team.shortDisplayName)] = aa;
+      const st = comp.status.type;
+      const key = ha + '-' + aa;
+      newScores[key] = {
+        s1: parseInt(home.score)||0,
+        s2: parseInt(away.score)||0,
+        state: st.state,
+        completed: st.completed,
+        clock: comp.status.displayClock,
+        detail: st.shortDetail
+      };
+    });
+    window._scores = newScores;
+  } catch(e) { console.warn('ESPN fetch failed', e); }
+}
+
+function getMatchScore(m) {
+  try {
+    const a1 = _espnAbbrevMap[_normName(teamName(m.team1))] || _espnAbbrevMap[_normName(m.team1)];
+    const a2 = _espnAbbrevMap[_normName(teamName(m.team2))] || _espnAbbrevMap[_normName(m.team2)];
+    if (!a1 || !a2) return null;
+    return window._scores[a1+'-'+a2] || window._scores[a2+'-'+a1] || null;
+  } catch(e) { return null; }
+}
+
 function scoreHTML(m, past) {
   const sc = getMatchScore(m);
   if (sc && sc.state === 'in')   return '<div class="mrt-vs live-score">' + sc.s1 + '–' + sc.s2 + '</div><div class="mrt-clock">' + sc.clock + '</div>';
@@ -2085,66 +2139,6 @@ buildTodayChip();
 renderGames();
 renderCountryPills();
 
-// ─────────────────────────────────────────────
-// LIVE SCORES  (ESPN public API — no key needed)
-// ─────────────────────────────────────────────
-window._scores = {};  // key: "ABB1-ABB2" → {s1, s2, state, clock}
-
-// Normalize team name → ESPN abbreviation for matching
-function _normName(n) {
-  return (n||'').toLowerCase()
-    .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ä/g,'a').replace(/é/g,'e').replace(/è/g,'e')
-    .replace(/[^a-z0-9 ]/g,'').trim();
-}
-
-// Build a lookup: normalized ESPN display name → abbrev
-let _espnAbbrevMap = {};
-
-async function fetchESPNScores() {
-  try {
-    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard', {cache:'no-store'});
-    const data = await res.json();
-    const newScores = {};
-    _espnAbbrevMap = {};
-    (data.events||[]).forEach(ev => {
-      const comp = ev.competitions[0];
-      const t = comp.competitors;
-      if (!t || t.length < 2) return;
-      // ESPN order: [0]=home, [1]=away  but shortName is "AWAY @ HOME"
-      // competitors[0] is listed first in the API as home, competitors[1] as away
-      const home = t.find(x => x.homeAway === 'home') || t[0];
-      const away = t.find(x => x.homeAway === 'away') || t[1];
-      const ha = home.team.abbreviation;
-      const aa = away.team.abbreviation;
-      _espnAbbrevMap[_normName(home.team.displayName)] = ha;
-      _espnAbbrevMap[_normName(home.team.shortDisplayName)] = ha;
-      _espnAbbrevMap[_normName(away.team.displayName)] = aa;
-      _espnAbbrevMap[_normName(away.team.shortDisplayName)] = aa;
-      const st = comp.status.type;
-      const key = ha + '-' + aa;
-      newScores[key] = {
-        s1: parseInt(home.score)||0,
-        s2: parseInt(away.score)||0,
-        state: st.state,       // 'pre' | 'in' | 'post'
-        completed: st.completed,
-        clock: comp.status.displayClock,
-        detail: st.shortDetail
-      };
-    });
-    window._scores = newScores;
-  } catch(e) { console.warn('ESPN fetch failed', e); }
-}
-
-// Resolve match teams → ESPN score entry
-function getMatchScore(m) {
-  const a1 = _espnAbbrevMap[_normName(teamName(m.team1))] || _espnAbbrevMap[_normName(m.team1)];
-  const a2 = _espnAbbrevMap[_normName(teamName(m.team2))] || _espnAbbrevMap[_normName(m.team2)];
-  if (!a1 || !a2) return null;
-  return window._scores[a1+'-'+a2] || window._scores[a2+'-'+a1] || null;
-}
-
-// Kick off immediately
-fetchESPNScores();
 
 // Live refresh every 30s — keeps live dots and past states current
 setInterval(() => {
