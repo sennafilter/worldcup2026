@@ -1786,7 +1786,6 @@ function renderMatchList(container, matches, highlight) {
 // ─────────────────────────────────────────────
 window._scores = {};
 let _espnAbbrevMap = {};
-// Also index by normalized name for robust matching
 let _scoresByName = {};
 
 function _normName(n) {
@@ -1796,40 +1795,53 @@ function _normName(n) {
     .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
 }
 
+function _ingestEvents(events, newScores, newAbbrev, newByName) {
+  (events||[]).forEach(ev => {
+    const comp = ev.competitions[0];
+    const st = comp.status.type;
+    const t = comp.competitors;
+    const home = t.find(x => x.homeAway === 'home') || t[0];
+    const away = t.find(x => x.homeAway === 'away') || t[1];
+    const ha = home.team.abbreviation;
+    const aa = away.team.abbreviation;
+    const scoreObj = {
+      s1: parseInt(home.score)||0, s2: parseInt(away.score)||0,
+      state: st.state, completed: st.completed,
+      clock: comp.status.displayClock, detail: st.shortDetail
+    };
+    newScores[ha+'-'+aa] = scoreObj;
+    const homeNames = [home.team.displayName, home.team.shortDisplayName, home.team.name].filter(Boolean);
+    const awayNames = [away.team.displayName, away.team.shortDisplayName, away.team.name].filter(Boolean);
+    homeNames.forEach(hn => {
+      awayNames.forEach(an => {
+        newByName[_normName(hn)+'__'+_normName(an)] = scoreObj;
+        newByName[_normName(an)+'__'+_normName(hn)] = {s1: scoreObj.s2, s2: scoreObj.s1, state: scoreObj.state, completed: scoreObj.completed, clock: scoreObj.clock, detail: scoreObj.detail};
+      });
+      newAbbrev[_normName(hn)] = ha;
+    });
+    awayNames.forEach(an => { newAbbrev[_normName(an)] = aa; });
+  });
+}
+
 async function fetchESPNScores() {
   try {
-    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard', {cache:'no-store'});
-    const data = await res.json();
-    const newScores = {};
-    const newAbbrev = {};
-    const newByName = {};
-    (data.events||[]).forEach(ev => {
-      const comp = ev.competitions[0];
-      const st = comp.status.type;
-      const t = comp.competitors;
-      const home = t.find(x => x.homeAway === 'home') || t[0];
-      const away = t.find(x => x.homeAway === 'away') || t[1];
-      const ha = home.team.abbreviation;
-      const aa = away.team.abbreviation;
-      const scoreObj = {
-        s1: parseInt(home.score)||0, s2: parseInt(away.score)||0,
-        state: st.state, completed: st.completed,
-        clock: comp.status.displayClock, detail: st.shortDetail
-      };
-      // Index by abbreviation pair
-      newScores[ha+'-'+aa] = scoreObj;
-      // Index by normalized display names (multiple variants)
-      const homeNames = [home.team.displayName, home.team.shortDisplayName, home.team.name].filter(Boolean);
-      const awayNames = [away.team.displayName, away.team.shortDisplayName, away.team.name].filter(Boolean);
-      homeNames.forEach(hn => {
-        awayNames.forEach(an => {
-          newByName[_normName(hn)+'__'+_normName(an)] = scoreObj;
-          newByName[_normName(an)+'__'+_normName(hn)] = {s1: scoreObj.s2, s2: scoreObj.s1, state: scoreObj.state, completed: scoreObj.completed, clock: scoreObj.clock, detail: scoreObj.detail};
-        });
-        newAbbrev[_normName(hn)] = ha;
-      });
-      awayNames.forEach(an => { newAbbrev[_normName(an)] = aa; });
-    });
+    const todayStr = today();
+    const pastDates = [...new Set((typeof MATCHES !== 'undefined' ? MATCHES : [])
+      .map(m => m.date).filter(d => d < todayStr))]
+      .map(d => d.replace(/-/g,''));
+
+    const urls = ['https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard'];
+    pastDates.forEach(d => urls.push('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=' + d));
+
+    const newScores = {}, newAbbrev = {}, newByName = {};
+    await Promise.all(urls.map(async url => {
+      try {
+        const res = await fetch(url, {cache:'no-store'});
+        const data = await res.json();
+        _ingestEvents(data.events, newScores, newAbbrev, newByName);
+      } catch(e) { console.warn('ESPN fetch failed for', url, e); }
+    }));
+
     window._scores = newScores;
     window._scoresByName = newByName;
     _espnAbbrevMap = newAbbrev;
@@ -1839,12 +1851,10 @@ async function fetchESPNScores() {
 
 function getMatchScore(m) {
   try {
-    const n1 = _normName(teamName ? teamName(m.team1) : m.team1);
-    const n2 = _normName(teamName ? teamName(m.team2) : m.team2);
-    // Try by name first (most reliable)
+    const n1 = _normName(typeof teamName === 'function' ? teamName(m.team1) : m.team1);
+    const n2 = _normName(typeof teamName === 'function' ? teamName(m.team2) : m.team2);
     const byName = (window._scoresByName||{})[n1+'__'+n2] || (window._scoresByName||{})[n2+'__'+n1];
     if (byName) return byName;
-    // Fallback: abbreviation lookup
     const a1 = _espnAbbrevMap[n1] || _espnAbbrevMap[_normName(m.team1)];
     const a2 = _espnAbbrevMap[n2] || _espnAbbrevMap[_normName(m.team2)];
     if (!a1 || !a2) return null;
@@ -1852,7 +1862,6 @@ function getMatchScore(m) {
   } catch(e) { return null; }
 }
 
-// Fetch immediately on load
 fetchESPNScores();
 function scoreHTML(m, past) {
   const sc = getMatchScore(m);
