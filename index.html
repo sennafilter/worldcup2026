@@ -1786,11 +1786,14 @@ function renderMatchList(container, matches, highlight) {
 // ─────────────────────────────────────────────
 window._scores = {};
 let _espnAbbrevMap = {};
+// Also index by normalized name for robust matching
+let _scoresByName = {};
 
 function _normName(n) {
   return (n||'').toLowerCase()
     .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ä/g,'a').replace(/é/g,'e').replace(/è/g,'e')
-    .replace(/[^a-z0-9 ]/g,'').trim();
+    .replace(/ñ/g,'n').replace(/ß/g,'ss').replace(/[-']/g,' ')
+    .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
 }
 
 async function fetchESPNScores() {
@@ -1798,43 +1801,59 @@ async function fetchESPNScores() {
     const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard', {cache:'no-store'});
     const data = await res.json();
     const newScores = {};
-    _espnAbbrevMap = {};
+    const newAbbrev = {};
+    const newByName = {};
     (data.events||[]).forEach(ev => {
       const comp = ev.competitions[0];
+      const st = comp.status.type;
       const t = comp.competitors;
-      if (!t || t.length < 2) return;
       const home = t.find(x => x.homeAway === 'home') || t[0];
       const away = t.find(x => x.homeAway === 'away') || t[1];
       const ha = home.team.abbreviation;
       const aa = away.team.abbreviation;
-      _espnAbbrevMap[_normName(home.team.displayName)] = ha;
-      _espnAbbrevMap[_normName(home.team.shortDisplayName)] = ha;
-      _espnAbbrevMap[_normName(away.team.displayName)] = aa;
-      _espnAbbrevMap[_normName(away.team.shortDisplayName)] = aa;
-      const st = comp.status.type;
-      const key = ha + '-' + aa;
-      newScores[key] = {
-        s1: parseInt(home.score)||0,
-        s2: parseInt(away.score)||0,
-        state: st.state,
-        completed: st.completed,
-        clock: comp.status.displayClock,
-        detail: st.shortDetail
+      const scoreObj = {
+        s1: parseInt(home.score)||0, s2: parseInt(away.score)||0,
+        state: st.state, completed: st.completed,
+        clock: comp.status.displayClock, detail: st.shortDetail
       };
+      // Index by abbreviation pair
+      newScores[ha+'-'+aa] = scoreObj;
+      // Index by normalized display names (multiple variants)
+      const homeNames = [home.team.displayName, home.team.shortDisplayName, home.team.name].filter(Boolean);
+      const awayNames = [away.team.displayName, away.team.shortDisplayName, away.team.name].filter(Boolean);
+      homeNames.forEach(hn => {
+        awayNames.forEach(an => {
+          newByName[_normName(hn)+'__'+_normName(an)] = scoreObj;
+          newByName[_normName(an)+'__'+_normName(hn)] = {s1: scoreObj.s2, s2: scoreObj.s1, state: scoreObj.state, completed: scoreObj.completed, clock: scoreObj.clock, detail: scoreObj.detail};
+        });
+        newAbbrev[_normName(hn)] = ha;
+      });
+      awayNames.forEach(an => { newAbbrev[_normName(an)] = aa; });
     });
     window._scores = newScores;
+    window._scoresByName = newByName;
+    _espnAbbrevMap = newAbbrev;
+    _scoresByName = newByName;
   } catch(e) { console.warn('ESPN fetch failed', e); }
 }
 
 function getMatchScore(m) {
   try {
-    const a1 = _espnAbbrevMap[_normName(teamName(m.team1))] || _espnAbbrevMap[_normName(m.team1)];
-    const a2 = _espnAbbrevMap[_normName(teamName(m.team2))] || _espnAbbrevMap[_normName(m.team2)];
+    const n1 = _normName(teamName ? teamName(m.team1) : m.team1);
+    const n2 = _normName(teamName ? teamName(m.team2) : m.team2);
+    // Try by name first (most reliable)
+    const byName = (window._scoresByName||{})[n1+'__'+n2] || (window._scoresByName||{})[n2+'__'+n1];
+    if (byName) return byName;
+    // Fallback: abbreviation lookup
+    const a1 = _espnAbbrevMap[n1] || _espnAbbrevMap[_normName(m.team1)];
+    const a2 = _espnAbbrevMap[n2] || _espnAbbrevMap[_normName(m.team2)];
     if (!a1 || !a2) return null;
     return window._scores[a1+'-'+a2] || window._scores[a2+'-'+a1] || null;
   } catch(e) { return null; }
 }
 
+// Fetch immediately on load
+fetchESPNScores();
 function scoreHTML(m, past) {
   const sc = getMatchScore(m);
   if (sc && sc.state === 'in')   return '<div class="mrt-vs live-score">' + sc.s1 + '–' + sc.s2 + '</div><div class="mrt-clock">' + sc.clock + '</div>';
