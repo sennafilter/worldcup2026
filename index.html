@@ -1870,7 +1870,14 @@ function _ingestEvents(events, newScores, newAbbrev, newByName) {
         'estadio bbva': 'Monterrey'
       };
       const _ground = Object.entries(_VENUE_MAP).find(([k]) => _vFull.includes(k))?.[1] || _vCity;
-      if (_ground) { if(!window._espnMatchTeams) window._espnMatchTeams={}; window._espnMatchTeams[_ground] = {t1: home.team.displayName, t2: away.team.displayName}; }
+      if (_ground) {
+        if(!window._espnMatchTeams) window._espnMatchTeams={};
+        const _mt = {t1: home.team.displayName, t2: away.team.displayName};
+        window._espnMatchTeams[_evDate+'__'+_ground] = _mt;
+        // Also store under prior day to handle UTC date offset for late local games
+        const _prevDay = _evDate ? new Date(new Date(_evDate+'T00:00:00Z').getTime()-864e5).toISOString().substring(0,10) : '';
+        if (_prevDay) window._espnMatchTeams[_prevDay+'__'+_ground] = _mt;
+      }
     }
     const homeNames = [home.team.displayName, home.team.shortDisplayName, home.team.name].filter(Boolean);
     const awayNames = [away.team.displayName, away.team.shortDisplayName, away.team.name].filter(Boolean);
@@ -1948,7 +1955,7 @@ function matchRowHTML(m, highlight) {
   let t1 = m.team1, t2 = m.team2;
   if (isKO) {
     // ESPN already knows the real teams — look up by date+city
-    const _espn = (window._espnMatchTeams||{})[m.ground];
+    const _espn = (window._espnMatchTeams||{})[m.date+'__'+m.ground];
     if (_espn) { t1 = _espn.t1; t2 = _espn.t2; }
     else { const _r = getGroupStandings().ranked; t1 = resolveSlot(m.team1,_r).name; t2 = resolveSlot(m.team2,_r).name; }
   }
@@ -2260,7 +2267,7 @@ function renderBracket() {
         const sc = getMatchScore(m);
         const isPast = sc && sc.state === 'post';
         const isLive = sc && sc.state === 'in';
-        const _espn = (window._espnMatchTeams||{})[m.ground];
+        const _espn = (window._espnMatchTeams||{})[m.date+'__'+m.ground];
         const t1 = _espn ? {name:_espn.t1,known:true} : resolveSlot(m.team1, ranked);
         const t2 = _espn ? {name:_espn.t2,known:true} : resolveSlot(m.team2, ranked);
         const scoreStr = isPast ? `<div class="brk-score">${sc.s1}–${sc.s2}</div>`
