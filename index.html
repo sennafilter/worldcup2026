@@ -1842,6 +1842,36 @@ function _ingestEvents(events, newScores, newAbbrev, newByName) {
       clock: comp.status.displayClock, detail: st.shortDetail
     };
     newScores[ha+'-'+aa] = scoreObj;
+    // Store actual team names keyed by date+venue city for KO slot resolution
+    const _evDate = (ev.date||'').substring(0,10);
+    if (_evDate) {
+      // Key by venue full name (normalized) so we can match our ground strings
+      const _vFull = (comp.venue?.fullName||'').toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+      const _vCity = (comp.venue?.address?.city||'').split(',')[0].trim();
+      // Map ESPN venue names to our ground strings
+      const _VENUE_MAP = {
+        'metlife stadium': 'New York/New Jersey',
+        'gillette stadium': 'Boston',
+        'lincoln financial field': 'Philadelphia',
+        'mercedes benz stadium': 'Atlanta',
+        'hard rock stadium': 'Miami',
+        'nrg stadium': 'Houston',
+        'at t stadium': 'Dallas',
+        'arrowhead stadium': 'Kansas City',
+        'empower field at mile high': 'Denver',
+        'levi s stadium': 'San Francisco Bay Area',
+        'sofi stadium': 'Los Angeles',
+        'rose bowl stadium': 'Los Angeles',
+        'lumen field': 'Seattle',
+        'bc place': 'Vancouver',
+        'bmo field': 'Toronto',
+        'estadio azteca': 'Mexico City',
+        'estadio akron': 'Guadalajara',
+        'estadio bbva': 'Monterrey'
+      };
+      const _ground = Object.entries(_VENUE_MAP).find(([k]) => _vFull.includes(k))?.[1] || _vCity;
+      if (_ground) window._espnMatchTeams[_evDate+'__'+_ground] = {t1: home.team.displayName, t2: away.team.displayName};
+    }
     const homeNames = [home.team.displayName, home.team.shortDisplayName, home.team.name].filter(Boolean);
     const awayNames = [away.team.displayName, away.team.shortDisplayName, away.team.name].filter(Boolean);
     homeNames.forEach(hn => {
@@ -1915,9 +1945,13 @@ function matchRowHTML(m, highlight) {
   const live = isLive(m.date,m.time);
   const past = isPast(m.date,m.time);
   const isKO = !m.group;
-  const _ranked = isKO ? getGroupStandings().ranked : {};
-  const t1 = isKO ? resolveSlot(m.team1,_ranked).name : m.team1;
-  const t2 = isKO ? resolveSlot(m.team2,_ranked).name : m.team2;
+  let t1 = m.team1, t2 = m.team2;
+  if (isKO) {
+    // ESPN already knows the real teams — look up by date+city
+    const _espn = (window._espnMatchTeams||{})[m.date+'__'+m.ground];
+    if (_espn) { t1 = _espn.t1; t2 = _espn.t2; }
+    else { const _r = getGroupStandings().ranked; t1 = resolveSlot(m.team1,_r).name; t2 = resolveSlot(m.team2,_r).name; }
+  }
   m = Object.assign({}, m, {team1:t1, team2:t2});
   const odds = getOdds(t1,t2);
   const r1 = rank(t1), r2 = rank(t2);
@@ -2226,8 +2260,9 @@ function renderBracket() {
         const sc = getMatchScore(m);
         const isPast = sc && sc.state === 'post';
         const isLive = sc && sc.state === 'in';
-        const t1 = resolveSlot(m.team1, ranked);
-        const t2 = resolveSlot(m.team2, ranked);
+        const _espn = (window._espnMatchTeams||{})[m.date+'__'+m.ground];
+        const t1 = _espn ? {name:_espn.t1,known:true} : resolveSlot(m.team1, ranked);
+        const t2 = _espn ? {name:_espn.t2,known:true} : resolveSlot(m.team2, ranked);
         const scoreStr = isPast ? `<div class="brk-score">${sc.s1}–${sc.s2}</div>`
           : isLive ? `<div class="brk-score live">${sc.s1}–${sc.s2} <span class="brk-live-dot"></span></div>`
           : '';
