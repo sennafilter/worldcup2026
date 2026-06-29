@@ -821,6 +821,29 @@ main {
   margin-top: 5px;
   text-align: right;
 }
+.brk-score {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  margin: 2px 0;
+  letter-spacing: 1px;
+}
+.brk-score.live { color: var(--red); }
+.brk-live-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: var(--red);
+  border-radius: 50%;
+  margin-left: 4px;
+  animation: pulse 1s infinite;
+  vertical-align: middle;
+}
+.brk-team.tbd { opacity: 0.45; font-style: italic; }
+.brk-match.past { background: var(--cream2); }
+.brk-match.live { border-color: var(--red); }
+
 
 /* ── GROUPS VIEW ── */
 .groups-wrap {
@@ -1877,7 +1900,10 @@ function getMatchScore(m) {
   } catch(e) { return null; }
 }
 
-fetchESPNScores().then(() => { if (document.getElementById('view-games')?.style.display !== 'none') renderGames(); });
+fetchESPNScores().then(() => {
+  if (document.getElementById('view-games')?.style.display !== 'none') renderGames();
+  if (document.getElementById('view-bracket')?.style.display !== 'none') renderBracket();
+});
 function scoreHTML(m, past) {
   const sc = getMatchScore(m);
   if (sc && sc.state === 'in')   return '<div class="mrt-vs live-score">' + sc.s1 + '–' + sc.s2 + '</div><div class="mrt-clock">' + sc.clock + '</div>';
@@ -2133,19 +2159,81 @@ function renderMap() {
 // ─────────────────────────────────────────────
 // BRACKET
 // ─────────────────────────────────────────────
+function getGroupStandings() {
+  // Compute W/D/L/GF/GA/GD/Pts for each team from completed matches
+  const table = {};
+  Object.entries(GROUPS).forEach(([g, teams]) => {
+    teams.forEach(t => { table[t] = {g, pts:0, gd:0, gf:0, ga:0, w:0, d:0, l:0}; });
+  });
+  MATCHES.filter(m => m.group).forEach(m => {
+    const sc = getMatchScore(m);
+    if (!sc || sc.state !== 'post') return;
+    const t1 = m.team1, t2 = m.team2;
+    if (!table[t1] || !table[t2]) return;
+    const g1 = sc.s1, g2 = sc.s2;
+    table[t1].gf += g1; table[t1].ga += g2; table[t1].gd += g1-g2;
+    table[t2].gf += g2; table[t2].ga += g1; table[t2].gd += g2-g1;
+    if (g1 > g2)      { table[t1].pts+=3; table[t1].w++; table[t2].l++; }
+    else if (g1===g2) { table[t1].pts+=1; table[t1].d++; table[t2].pts+=1; table[t2].d++; }
+    else              { table[t2].pts+=3; table[t2].w++; table[t1].l++; }
+  });
+  // Sort each group: pts desc, gd desc, gf desc
+  const ranked = {};
+  Object.entries(GROUPS).forEach(([g, teams]) => {
+    ranked[g] = [...teams].sort((a,b) => {
+      const ta=table[a]||{pts:0,gd:0,gf:0}, tb=table[b]||{pts:0,gd:0,gf:0};
+      return (tb.pts-ta.pts) || (tb.gd-ta.gd) || (tb.gf-ta.gf);
+    });
+  });
+  return {table, ranked};
+}
+
+function resolveSlot(slot, ranked) {
+  // slot is like "1A", "2B", "Best 3rd"
+  if (!slot || slot === 'TBD') return {name: slot, known: false};
+  const m1 = slot.match(/^([12])([A-L])$/);
+  if (m1) {
+    const pos = parseInt(m1[1]) - 1; // 0=1st, 1=2nd
+    const grp = 'Group ' + m1[2];
+    const teams = ranked[grp];
+    if (teams && teams[pos]) {
+      // Check if enough matches played to be confident
+      return {name: teams[pos], known: true};
+    }
+    return {name: slot, known: false};
+  }
+  // Best 3rd / other slots stay as-is for now
+  const qual = QUAL_NAMES[slot];
+  if (qual) return {name: qual, known: true};
+  return {name: slot, known: false};
+}
+
 function renderBracket() {
   const rounds = ['Round of 32','Round of 16','Quarter-final','Semi-final','Final','Match for third place'];
   const inner = document.getElementById('bracket-inner');
+  const {ranked} = getGroupStandings();
+
   inner.innerHTML = rounds.map(r=>{
     const ms = MATCHES.filter(m=>m.round===r);
     if(!ms.length) return '';
     return `<div class="brk-round">
       <div class="brk-round-title">${r}</div>
-      ${ms.map(m=>`<div class="brk-match">
-        <div class="brk-team">${flag(m.team1)} ${m.team1}</div>
-        <div class="brk-team">${flag(m.team2)} ${m.team2}</div>
-        <div class="brk-date">${m.date.slice(5)} · ${m.ground}</div>
-      </div>`).join('')}
+      ${ms.map(m=>{
+        const sc = getMatchScore(m);
+        const isPast = sc && sc.state === 'post';
+        const isLive = sc && sc.state === 'in';
+        const t1 = resolveSlot(m.team1, ranked);
+        const t2 = resolveSlot(m.team2, ranked);
+        const scoreStr = isPast ? `<div class="brk-score">${sc.s1}–${sc.s2}</div>`
+          : isLive ? `<div class="brk-score live">${sc.s1}–${sc.s2} <span class="brk-live-dot"></span></div>`
+          : '';
+        return `<div class="brk-match ${isPast?'past':''} ${isLive?'live':''}">
+          <div class="brk-team ${t1.known?'':'tbd'}">${flag(t1.name)} ${teamName(t1.name)}</div>
+          ${scoreStr}
+          <div class="brk-team ${t2.known?'':'tbd'}">${flag(t2.name)} ${teamName(t2.name)}</div>
+          <div class="brk-date">${m.date.slice(5)} · ${m.ground}</div>
+        </div>`;
+      }).join('')}
     </div>`;
   }).join('');
 }
@@ -2230,6 +2318,7 @@ setInterval(() => {
   fetchESPNScores().then(() => {
     const av2 = document.querySelector('.view-section[style*="block"], .view-section:not([style*="none"])')?.id;
     if (av2 === 'view-games') renderGames();
+    if (av2 === 'view-bracket') renderBracket();
   });
 }, 30000);
 // v2
