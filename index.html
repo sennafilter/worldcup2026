@@ -1914,10 +1914,14 @@ function scoreHTML(m, past) {
 function matchRowHTML(m, highlight) {
   const live = isLive(m.date,m.time);
   const past = isPast(m.date,m.time);
-  const odds = getOdds(m.team1,m.team2);
   const isKO = !m.group;
-  const r1 = rank(m.team1), r2 = rank(m.team2);
-  const favd = followingTeams.has(m.team1)||followingTeams.has(m.team2);
+  const _ranked = isKO ? getGroupStandings().ranked : {};
+  const t1 = isKO ? resolveSlot(m.team1,_ranked).name : m.team1;
+  const t2 = isKO ? resolveSlot(m.team2,_ranked).name : m.team2;
+  m = Object.assign({}, m, {team1:t1, team2:t2});
+  const odds = getOdds(t1,t2);
+  const r1 = rank(t1), r2 = rank(t2);
+  const favd = followingTeams.has(t1)||followingTeams.has(t2);
   const isFav1 = !isKO && odds.w1>0.47;
   const isFav2 = !isKO && odds.w2>0.47;
   const h1 = highlight===m.team1, h2 = highlight===m.team2;
