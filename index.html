@@ -1816,6 +1816,7 @@ function renderMatchList(container, matches, highlight) {
 // LIVE SCORES  (ESPN public API — no key needed)
 // ─────────────────────────────────────────────
 window._scores = {};
+window._espnMatchTeams = {};
 let _espnAbbrevMap = {};
 let _scoresByName = {};
 
@@ -1870,7 +1871,7 @@ function _ingestEvents(events, newScores, newAbbrev, newByName) {
         'estadio bbva': 'Monterrey'
       };
       const _ground = Object.entries(_VENUE_MAP).find(([k]) => _vFull.includes(k))?.[1] || _vCity;
-      if (_ground) window._espnMatchTeams[_evDate+'__'+_ground] = {t1: home.team.displayName, t2: away.team.displayName};
+      if (_ground) { if(!window._espnMatchTeams) window._espnMatchTeams={}; window._espnMatchTeams[_evDate+'__'+_ground] = {t1: home.team.displayName, t2: away.team.displayName}; }
     }
     const homeNames = [home.team.displayName, home.team.shortDisplayName, home.team.name].filter(Boolean);
     const awayNames = [away.team.displayName, away.team.shortDisplayName, away.team.name].filter(Boolean);
