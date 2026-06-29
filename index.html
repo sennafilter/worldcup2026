@@ -1895,12 +1895,14 @@ function _ingestEvents(events, newScores, newAbbrev, newByName) {
 async function fetchESPNScores() {
   try {
     const todayStr = today();
-    const pastDates = [...new Set((typeof MATCHES !== 'undefined' ? MATCHES : [])
-      .map(m => m.date).filter(d => d < todayStr))]
-      .map(d => d.replace(/-/g,''));
+    const allMatchDates = [...new Set((typeof MATCHES !== 'undefined' ? MATCHES : [])
+      .map(m => m.date))].map(d => d.replace(/-/g,''));
 
     const urls = ['https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard'];
-    pastDates.forEach(d => urls.push('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=' + d));
+    allMatchDates.forEach(d => {
+      if (d !== todayStr.replace(/-/g,'')) // today already covered by default URL
+        urls.push('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=' + d);
+    });
 
     const newScores = {}, newAbbrev = {}, newByName = {};
     await Promise.all(urls.map(async url => {
